@@ -8,12 +8,12 @@ import os
 import sys
 import tempfile
 import struct
-from .binary_format import (
+from xtc1reader.binary_format import (
     parse_datagram_header, parse_xtc_header, ClockTime, TimeStamp, 
     Sequence, Env, Damage, Src, TypeIdInfo, XTCContainer, TypeId
 )
-from .xtc_reader import XTCReader, XTCIterator
-from .data_types import parse_detector_data, is_image_type
+from xtc1reader.xtc_reader import XTCReader, XTCIterator
+from xtc1reader.data_types import parse_detector_data, is_image_type
 
 
 def test_binary_parsing():

@@ -11,7 +11,7 @@ import shutil
 from pathlib import Path
 from typing import Tuple
 
-from .calibration import (
+from xtc1reader.calibration import (
     CalibrationConstants, DetectorCalibrator, CalibrationManager,
     CommonModeCorrection, create_default_calibration, calibrate_detector_data
 )

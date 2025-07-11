@@ -293,12 +293,28 @@ def calibration_command(action: str, detector_type: str = None, run_number: int 
 
 def test_command():
     """Run internal tests"""
-    from .test_reader import run_all_tests
-    
     print("Running XTC reader tests...")
-    success = run_all_tests()
     
-    return 0 if success else 1
+    # Try to import and run tests from the tests directory
+    try:
+        import sys
+        import os
+        
+        # Add tests directory to path
+        tests_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'tests')
+        if os.path.exists(tests_dir):
+            sys.path.insert(0, tests_dir)
+        
+        from test_reader import run_all_tests
+        success = run_all_tests()
+        return 0 if success else 1
+        
+    except ImportError:
+        print("Test modules not found. Please run tests manually:")
+        print("  python tests/test_reader.py")
+        print("  python tests/test_geometry.py") 
+        print("  python tests/test_calibration.py")
+        return 1
 
 
 def main():

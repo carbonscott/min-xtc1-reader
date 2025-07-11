@@ -9,7 +9,7 @@ import sys
 import numpy as np
 import tempfile
 import os
-from .geometry import (
+from xtc1reader.geometry import (
     DetectorSegment, DetectorGeometry, CoordinateArrays,
     create_cspad_geometry, create_pnccd_geometry, create_camera_geometry,
     apply_rotation_2d, compute_segment_coordinates, compute_detector_coordinates,
