@@ -1,0 +1,10 @@
+# Core dependencies for xtc1reader
+numpy>=1.19.0
+
+# Optional development dependencies (install with: pip install -e .[dev])
+# pytest>=6.0
+# pytest-cov>=2.0
+
+# Optional documentation dependencies (install with: pip install -e .[docs])  
+# sphinx>=3.0
+# sphinx-rtd-theme>=0.5

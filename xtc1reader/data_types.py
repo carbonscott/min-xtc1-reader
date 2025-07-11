@@ -1,0 +1,272 @@
+"""
+Data type parsers for common LCLS detectors.
+
+Handles decoding of binary data for various detector types found in XTC files.
+"""
+
+import struct
+import numpy as np
+from typing import NamedTuple, Optional, Any, TYPE_CHECKING
+from .binary_format import TypeId
+
+if TYPE_CHECKING:
+    from numpy.typing import NDArray
+
+class CameraFrame(NamedTuple):
+    """Parsed camera frame data"""
+    width: int
+    height: int
+    depth: int  # bits per pixel
+    offset: int
+    data: 'NDArray'  # 2D array of pixel values
+    
+    
+class CSPadElement(NamedTuple):
+    """Parsed CSPad element (2x1 section) data"""
+    quad: int
+    section: int  
+    data: 'NDArray'  # Shape: (185, 388) for standard CSPad 2x1
+    common_mode: Optional['NDArray'] = None
+
+
+class CSPadConfig(NamedTuple):
+    """CSPad configuration information"""
+    quad_mask: int  # Which quads are active
+    asic_mask: int  # Which ASICs are active  
+    run_delay: int
+    event_code: int
+    # Simplified - real config has many more fields
+
+
+def parse_camera_frame(data: bytes, type_id: int, version: int) -> CameraFrame:
+    """
+    Parse camera frame data from XTC payload.
+    
+    Args:
+        data: Raw frame data bytes
+        type_id: Type ID from XTC header
+        version: Version from XTC header
+        
+    Returns:
+        CameraFrame with decoded image data
+    """
+    if len(data) < 16:
+        raise ValueError("Camera frame data too short")
+    
+    # Parse frame header - format varies by camera type
+    if type_id == TypeId.Id_Frame:
+        # Generic frame format
+        width, height, depth, offset = struct.unpack('<4I', data[0:16])
+        
+        # Calculate expected data size
+        bytes_per_pixel = (depth + 7) // 8  # Round up to nearest byte
+        expected_size = width * height * bytes_per_pixel
+        
+        if len(data) < 16 + expected_size:
+            raise ValueError(f"Frame data truncated: {len(data)} < {16 + expected_size}")
+        
+        # Extract pixel data
+        pixel_data = data[16:16 + expected_size]
+        
+        # Convert to numpy array based on depth
+        if depth <= 8:
+            dtype = np.uint8
+        elif depth <= 16:
+            dtype = np.uint16
+        else:
+            dtype = np.uint32
+            
+        # Parse pixel data (little-endian)
+        if dtype == np.uint8:
+            pixels = np.frombuffer(pixel_data, dtype=np.uint8)
+        elif dtype == np.uint16:
+            pixels = np.frombuffer(pixel_data, dtype='<u2')  # little-endian uint16
+        else:
+            pixels = np.frombuffer(pixel_data, dtype='<u4')  # little-endian uint32
+        
+        # Reshape to 2D image
+        image = pixels.reshape((height, width))
+        
+        return CameraFrame(width, height, depth, offset, image)
+    
+    else:
+        raise ValueError(f"Unsupported camera type: {type_id}")
+
+
+def parse_pnccd_frame(data: bytes, version: int) -> CameraFrame:
+    """
+    Parse pnCCD frame data.
+    
+    pnCCD has fixed format: 512x512 pixels, 16-bit depth
+    """
+    if version == 1:
+        # pnCCD frame is just raw pixel data, no header
+        expected_size = 512 * 512 * 2  # 16-bit pixels
+        
+        if len(data) < expected_size:
+            raise ValueError(f"pnCCD frame data too short: {len(data)} < {expected_size}")
+        
+        # Parse as little-endian uint16
+        pixels = np.frombuffer(data[:expected_size], dtype='<u2')
+        image = pixels.reshape((512, 512))
+        
+        return CameraFrame(512, 512, 16, 0, image)
+    
+    else:
+        raise ValueError(f"Unsupported pnCCD version: {version}")
+
+
+def parse_cspad_element(data: bytes, version: int) -> CSPadElement:
+    """
+    Parse CSPad element (2x1 section) data.
+    
+    CSPad elements have fixed format: 185x388 pixels, 16-bit
+    """
+    if version in [1, 2]:
+        # CSPad element format
+        if len(data) < 16:
+            raise ValueError("CSPad element header too short")
+        
+        # Parse element header
+        tid, acq_count, op_code, quad, sect_id = struct.unpack('<5I', data[0:20])
+        
+        # Calculate remaining data for pixels
+        pixel_data_size = 185 * 388 * 2  # 16-bit pixels
+        
+        if len(data) < 20 + pixel_data_size:
+            raise ValueError(f"CSPad element data too short: {len(data)} < {20 + pixel_data_size}")
+        
+        # Extract pixel data  
+        pixel_data = data[20:20 + pixel_data_size]
+        pixels = np.frombuffer(pixel_data, dtype='<u2')  # little-endian uint16
+        image = pixels.reshape((185, 388))
+        
+        return CSPadElement(quad, sect_id, image)
+    
+    else:
+        raise ValueError(f"Unsupported CSPad element version: {version}")
+
+
+def parse_cspad_config(data: bytes, version: int) -> CSPadConfig:
+    """
+    Parse CSPad configuration data.
+    
+    This is simplified - real CSPad config has many more fields
+    """
+    if len(data) < 16:
+        raise ValueError("CSPad config data too short")
+    
+    # Parse basic config fields
+    quad_mask, asic_mask, run_delay, event_code = struct.unpack('<4I', data[0:16])
+    
+    return CSPadConfig(quad_mask, asic_mask, run_delay, event_code)
+
+
+def parse_princeton_frame(data: bytes, version: int) -> CameraFrame:
+    """
+    Parse Princeton camera frame data.
+    """
+    if version == 1:
+        if len(data) < 16:
+            raise ValueError("Princeton frame header too short")
+        
+        # Princeton frame header
+        shotIdStart, readoutTime = struct.unpack('<2I', data[0:8])
+        width, height = struct.unpack('<2I', data[8:16])
+        
+        # Princeton uses 16-bit pixels
+        pixel_data_size = width * height * 2
+        
+        if len(data) < 16 + pixel_data_size:
+            raise ValueError(f"Princeton frame data too short")
+        
+        pixel_data = data[16:16 + pixel_data_size]
+        pixels = np.frombuffer(pixel_data, dtype='<u2')
+        image = pixels.reshape((height, width))
+        
+        return CameraFrame(width, height, 16, 0, image)
+    
+    else:
+        raise ValueError(f"Unsupported Princeton version: {version}")
+
+
+def parse_detector_data(data: bytes, type_id: int, version: int) -> Any:
+    """
+    Parse detector data based on type ID and version.
+    
+    Args:
+        data: Raw detector data bytes
+        type_id: Type ID from XTC header
+        version: Version from XTC header
+        
+    Returns:
+        Parsed detector data object (type depends on detector)
+    """
+    if type_id == TypeId.Id_Frame:
+        return parse_camera_frame(data, type_id, version)
+    
+    elif type_id == TypeId.Id_pnCCDframe:
+        return parse_pnccd_frame(data, version)
+    
+    elif type_id == TypeId.Id_CspadElement:
+        return parse_cspad_element(data, version)
+    
+    elif type_id == TypeId.Id_CspadConfig:
+        return parse_cspad_config(data, version)
+    
+    elif type_id == TypeId.Id_PrincetonFrame:
+        return parse_princeton_frame(data, version)
+    
+    else:
+        # Return raw data for unsupported types
+        return data
+
+
+def get_detector_shape(type_id: int, version: int) -> Optional[tuple[int, ...]]:
+    """
+    Get expected data shape for detector type.
+    
+    Returns:
+        Tuple of dimensions or None if unknown
+    """
+    shapes = {
+        TypeId.Id_pnCCDframe: (512, 512),
+        TypeId.Id_CspadElement: (185, 388),
+        # Add more as needed
+    }
+    
+    return shapes.get(type_id)
+
+
+def is_image_type(type_id: int) -> bool:
+    """
+    Check if type ID represents image/detector data.
+    """
+    image_types = {
+        TypeId.Id_Frame,
+        TypeId.Id_pnCCDframe, 
+        TypeId.Id_CspadElement,
+        TypeId.Id_PrincetonFrame,
+        # Add more as needed
+    }
+    
+    return type_id in image_types
+
+
+def get_type_description(type_id: int) -> str:
+    """
+    Get human-readable description of data type.
+    """
+    descriptions = {
+        TypeId.Id_Frame: "Generic camera frame",
+        TypeId.Id_pnCCDframe: "pnCCD detector frame (512x512)",
+        TypeId.Id_CspadElement: "CSPad 2x1 element (185x388)",
+        TypeId.Id_CspadConfig: "CSPad configuration",
+        TypeId.Id_PrincetonFrame: "Princeton camera frame",
+        TypeId.Id_Xtc: "XTC container",
+        TypeId.Id_EvrData: "Event receiver data",
+        TypeId.Id_EBeam: "Electron beam data",
+        TypeId.Id_Epics: "EPICS PV data",
+    }
+    
+    return descriptions.get(type_id, f"Unknown type {type_id}")
