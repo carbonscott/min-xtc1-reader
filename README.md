@@ -7,7 +7,8 @@ A minimal, lightweight Python library for reading LCLS1 XTC files without the fu
 - **Pure Python**: No C++ dependencies, works with just NumPy
 - **Lightweight**: Minimal implementation focused on essential functionality
 - **Complete XTC Parsing**: Full support for LCLS1 XTC file format
-- **Detector Geometry**: Coordinate mapping for CSPad, pnCCD, and cameras
+- **Detector Geometry**: Coordinate mapping for CSPad, pnCCD, cameras, and **Epix10ka2M**
+- **Psana-Compatible Assembly**: Sophisticated coordinate-based image assembly for Epix10ka2M detectors
 - **Basic Calibration**: Pedestal subtraction, common mode correction, pixel masking
 - **Command Line Interface**: Easy-to-use CLI for file inspection and analysis
 - **Well Tested**: Comprehensive test suite with real data validation
@@ -65,6 +66,26 @@ print(f"CSPad has {geometry.num_segments} segments")
 print(f"Coordinate arrays shape: {coords.x_coords.shape}")
 ```
 
+### Epix10ka2M Detector Support
+
+```python
+from xtc1reader import assemble_epix10ka2m_psana_compatible, parse_epix10ka2m_array
+import numpy as np
+
+# Parse Epix10ka2M detector data from XTC payload
+epix_data = parse_epix10ka2m_array(raw_bytes, version=1)
+print(f"Frame {epix_data.frame_number}: {epix_data.frames.shape}")
+
+# Assemble into psana-compatible image (~1672×1674 pixels)
+assembled_image = assemble_epix10ka2m_psana_compatible(epix_data.frames)
+print(f"Assembled image: {assembled_image.shape}")
+
+# Compare with simple assembly (704×3072 pixels)
+from xtc1reader import assemble_epix10ka2m_image
+simple_image = assemble_epix10ka2m_image(epix_data.frames, include_gaps=False)
+print(f"Simple assembly: {simple_image.shape}")
+```
+
 ### Calibration
 
 ```python
@@ -93,6 +114,9 @@ xtc1reader extract data.xtc --detector cspad --max-events 100
 
 # Show detector geometry
 xtc1reader geometry cspad
+
+# Show Epix10ka2M geometry (both simple and psana-compatible)
+xtc1reader geometry epix10ka2m
 
 # Test calibration system
 xtc1reader calibration test
@@ -129,6 +153,15 @@ xtc1reader --help
 - **CSPad**: Cornell-SLAC Pixel Array Detector
 - **pnCCD**: p-n Charge-Coupled Device
 - **Camera**: Various camera detectors (Opal, etc.)
+- **Epix10ka2M**: Advanced pixel detector with sophisticated coordinate-based assembly
+
+### Epix10ka2M Features
+
+- **Psana-Compatible Assembly**: Produces ~1672×1674 images matching psana's `.image()` output
+- **Coordinate-Based Geometry**: Handles panel rotations, translations, and tilts
+- **Dual Assembly Modes**: Simple panel arrangement (704×3072) vs sophisticated coordinate assembly
+- **Real Geometry Files**: Uses psana geometry definitions for accurate detector modeling
+- **Wide Pixel Support**: Handles 250μm pixels at ASIC boundaries vs 100μm regular pixels
 
 ## Environment Variables
 
@@ -148,9 +181,19 @@ See the [`examples/`](examples/) directory for:
 
 ## Documentation
 
+- [`COMPREHENSIVE_LESSONS_LEARNED.md`](COMPREHENSIVE_LESSONS_LEARNED.md) - Complete technical guide and lessons learned
 - [`docs/IMPLEMENTATION_SUMMARY.md`](docs/IMPLEMENTATION_SUMMARY.md) - Technical implementation details
 - [`docs/REAL_DATA_TEST_PLAN.md`](docs/REAL_DATA_TEST_PLAN.md) - Testing with real LCLS data
 - [`docs/DEVELOPMENT_PROGRESS.md`](docs/DEVELOPMENT_PROGRESS.md) - Development history
+
+### Epix10ka2M Technical Details
+
+The Epix10ka2M implementation includes:
+- **16-panel detector**: 352×384 pixels per panel with individual rotations (0°, 90°, 180°, 270°)
+- **Coordinate transformations**: 3D rotations, translations, and tilt corrections
+- **Psana geometry compatibility**: Uses same geometry files and algorithms as psana framework
+- **Binary data parsing**: Direct XTC payload parsing for Epix10ka2M ArrayV1 data
+- **Image assembly**: Coordinate-to-pixel mapping with half-pixel boundary corrections
 
 ## Testing
 
