@@ -31,6 +31,22 @@ from .calibration import (
     CalibrationConstants, DetectorCalibrator, CalibrationManager,
     CommonModeCorrection, create_default_calibration, calibrate_detector_data
 )
+from .data_types import (
+    Epix10ka2MData, parse_epix10ka2m_array, parse_detector_data
+)
+from .epix_utils import (
+    assemble_epix10ka2m_image, get_detector_info, extract_panel, extract_quad,
+    assemble_epix10ka2m_psana_compatible, get_psana_geometry_info, 
+    compare_assembly_methods, validate_psana_assembly
+)
+from .geometry_parser import (
+    parse_geometry_file, load_default_epix10ka2m_geometry, validate_geometry,
+    print_geometry_summary, GeometryParseError
+)
+from .geometry_definitions import (
+    DetectorGeometry, PanelGeometry, CoordinateArrays, PixelIndices,
+    EPIX10KA2M_PANEL_SHAPE, EPIX10KA2M_NUM_PANELS, EPIX10KA2M_PIXEL_SIZE_UM
+)
 
 __all__ = [
     'XTCReader',
@@ -58,5 +74,28 @@ __all__ = [
     'CalibrationManager',
     'CommonModeCorrection',
     'create_default_calibration',
-    'calibrate_detector_data'
+    'calibrate_detector_data',
+    'Epix10ka2MData',
+    'parse_epix10ka2m_array',
+    'parse_detector_data',
+    'assemble_epix10ka2m_image',
+    'get_detector_info',
+    'extract_panel',
+    'extract_quad',
+    'assemble_epix10ka2m_psana_compatible',
+    'get_psana_geometry_info',
+    'compare_assembly_methods',
+    'validate_psana_assembly',
+    'parse_geometry_file',
+    'load_default_epix10ka2m_geometry',
+    'validate_geometry',
+    'print_geometry_summary',
+    'GeometryParseError',
+    'DetectorGeometry',
+    'PanelGeometry',
+    'CoordinateArrays',
+    'PixelIndices',
+    'EPIX10KA2M_PANEL_SHAPE',
+    'EPIX10KA2M_NUM_PANELS',
+    'EPIX10KA2M_PIXEL_SIZE_UM'
 ]

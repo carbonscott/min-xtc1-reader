@@ -61,6 +61,12 @@ class TypeId(IntEnum):
     Id_PrincetonInfo = 27
     Id_CspadElement = 28     # CSPad detector data
     Id_CspadConfig = 29      # CSPad configuration
+    # Epix detector types
+    Id_EpixConfig = 30       # Epix configuration
+    Id_EpixElement = 31      # Epix detector data
+    Id_Epix10kaConfig = 32   # Epix10ka configuration
+    Id_Epix10kaArray = 33    # Epix10ka array data (for 10ka2M)
+    Id_Epix10ka2MConfig = 34 # Epix10ka2M configuration
     # Add more as needed...
 
 

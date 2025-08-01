@@ -12,6 +12,8 @@ from .xtc_reader import XTCReader, get_xtc_info, print_xtc_tree
 from .data_types import parse_detector_data, is_image_type, get_type_description
 from .binary_format import TypeId, transition_name
 from .geometry import create_cspad_geometry, create_pnccd_geometry, create_camera_geometry, compute_detector_coordinates
+from .epix_utils import get_detector_info, assemble_epix10ka2m_image, get_psana_geometry_info
+from .geometry_parser import load_default_epix10ka2m_geometry, print_geometry_summary
 from .calibration import CalibrationManager, create_default_calibration, calibrate_detector_data
 
 
@@ -150,9 +152,42 @@ def geometry_command(detector_type: str, output_file: str = None):
             geometry = create_pnccd_geometry()
         elif detector_type.lower() == 'camera':
             geometry = create_camera_geometry()
+        elif detector_type.lower() == 'epix10ka2m':
+            # Handle Epix10ka2M detector info with both simple and psana-compatible geometry
+            print("=== Simple Assembly Info ===")
+            detector_info = get_detector_info()
+            print(f"Detector: {detector_info['name']}")
+            print(f"Number of panels: {detector_info['num_panels']}")
+            print(f"Panels per quad: {detector_info['panels_per_quad']}")
+            print(f"Panel shape: {detector_info['panel_shape']}")
+            print(f"Pixel size: {detector_info['pixel_size_um']} μm")
+            print(f"Total pixels: {detector_info['total_pixels']:,}")
+            print(f"Assembled shape (no gaps): {detector_info['assembled_shape_no_gaps']}")
+            print(f"Assembled shape (with gaps): {detector_info['assembled_shape_with_gaps']}")
+            
+            print("\n=== Psana-Compatible Assembly Info ===")
+            try:
+                # Load and display psana geometry
+                geometry = load_default_epix10ka2m_geometry()
+                print_geometry_summary(geometry)
+                
+                # Get psana assembly info
+                psana_info = get_psana_geometry_info(geometry)
+                print(f"\nPsana assembly info:")
+                print(f"  Assembled image shape: {psana_info['assembled_image_shape']}")
+                print(f"  Coordinate bounds:")
+                bounds = psana_info['coordinate_bounds']
+                print(f"    X: {bounds['x_min']:.0f} to {bounds['x_max']:.0f} μm ({bounds['x_range']:.0f} μm)")
+                print(f"    Y: {bounds['y_min']:.0f} to {bounds['y_max']:.0f} μm ({bounds['y_range']:.0f} μm)")
+                
+            except Exception as e:
+                print(f"Could not load psana geometry: {e}")
+                print("Using basic geometry info only.")
+            
+            return 0
         else:
             print(f"Unknown detector type: {detector_type}")
-            print("Supported types: cspad, pnccd, camera")
+            print("Supported types: cspad, pnccd, camera, epix10ka2m")
             return 1
         
         print(f"Detector: {geometry.name}")
@@ -228,6 +263,8 @@ def calibration_command(action: str, detector_type: str = None, run_number: int 
             shape = (512, 512)
         elif detector_type.lower() == "camera":
             shape = (1024, 1024)
+        elif detector_type.lower() == "epix10ka2m":
+            shape = (16, 352, 384)  # 16 panels of 352x384
         else:
             print(f"Unknown detector type: {detector_type}")
             return 1
@@ -361,7 +398,7 @@ Examples:
     
     # Geometry command
     geometry_parser = subparsers.add_parser('geometry', help='Generate detector geometry')
-    geometry_parser.add_argument('detector_type', choices=['cspad', 'pnccd', 'camera'],
+    geometry_parser.add_argument('detector_type', choices=['cspad', 'pnccd', 'camera', 'epix10ka2m'],
                                 help='Detector type to generate geometry for')
     geometry_parser.add_argument('--output', '-o', help='Save coordinates to file (.npz format)')
     
@@ -369,7 +406,7 @@ Examples:
     calibration_parser = subparsers.add_parser('calibration', help='Manage detector calibration')
     calibration_parser.add_argument('action', choices=['test', 'create-default', 'info'],
                                    help='Calibration action to perform')
-    calibration_parser.add_argument('--detector-type', choices=['cspad', 'pnccd', 'camera'],
+    calibration_parser.add_argument('--detector-type', choices=['cspad', 'pnccd', 'camera', 'epix10ka2m'],
                                    help='Detector type')
     calibration_parser.add_argument('--run-number', type=int, help='Run number')
     calibration_parser.add_argument('--calibration-dir', help='Calibration directory')

@@ -38,6 +38,23 @@ class CSPadConfig(NamedTuple):
     # Simplified - real config has many more fields
 
 
+class Epix10ka2MData(NamedTuple):
+    """Parsed Epix10ka2M detector data"""
+    frame_number: int
+    frames: 'NDArray'  # Shape: (16, 352, 384) - 16 panels of 352x384 pixels each
+    timestamp: Optional[float] = None
+    
+    @property
+    def num_panels(self) -> int:
+        """Number of detector panels"""
+        return 16
+    
+    @property  
+    def panel_shape(self) -> tuple[int, int]:
+        """Shape of individual panel"""
+        return (352, 384)
+
+
 def parse_camera_frame(data: bytes, type_id: int, version: int) -> CameraFrame:
     """
     Parse camera frame data from XTC payload.
@@ -190,6 +207,51 @@ def parse_princeton_frame(data: bytes, version: int) -> CameraFrame:
         raise ValueError(f"Unsupported Princeton version: {version}")
 
 
+def parse_epix10ka2m_array(data: bytes, version: int) -> Epix10ka2MData:
+    """
+    Parse Epix10ka2M ArrayV1 data from XTC payload.
+    
+    Expected binary structure (based on psana DDL):
+    - uint32_t frameNumber (4 bytes)
+    - uint16_t frame[16][352][384] (16 * 352 * 384 * 2 bytes)
+    - Additional calibration/environmental data (skipped in MVP)
+    
+    Args:
+        data: Raw array data bytes
+        version: Version from XTC header
+        
+    Returns:
+        Parsed Epix10ka2M data
+    """
+    if len(data) < 4:
+        raise ValueError("Epix10ka2M data too short for frame number")
+    
+    # Parse frame number (uint32)
+    frame_number = struct.unpack('<I', data[0:4])[0]
+    
+    # Calculate expected frame data size
+    # 16 panels × 352 rows × 384 columns × 2 bytes/pixel
+    num_panels = 16
+    panel_rows = 352
+    panel_cols = 384
+    bytes_per_pixel = 2
+    frame_data_size = num_panels * panel_rows * panel_cols * bytes_per_pixel
+    
+    if len(data) < 4 + frame_data_size:
+        raise ValueError(f"Epix10ka2M data too short: expected {4 + frame_data_size}, got {len(data)}")
+    
+    # Extract frame data (skip first 4 bytes which are frame number)
+    frame_bytes = data[4:4 + frame_data_size]
+    
+    # Parse as uint16 array (little-endian)
+    pixel_data = np.frombuffer(frame_bytes, dtype='<u2')
+    
+    # Reshape to (16, 352, 384)
+    frames = pixel_data.reshape((num_panels, panel_rows, panel_cols))
+    
+    return Epix10ka2MData(frame_number, frames)
+
+
 def parse_detector_data(data: bytes, type_id: int, version: int) -> Any:
     """
     Parse detector data based on type ID and version.
@@ -217,6 +279,9 @@ def parse_detector_data(data: bytes, type_id: int, version: int) -> Any:
     elif type_id == TypeId.Id_PrincetonFrame:
         return parse_princeton_frame(data, version)
     
+    elif type_id == TypeId.Id_Epix10kaArray:
+        return parse_epix10ka2m_array(data, version)
+    
     else:
         # Return raw data for unsupported types
         return data
@@ -232,6 +297,7 @@ def get_detector_shape(type_id: int, version: int) -> Optional[tuple[int, ...]]:
     shapes = {
         TypeId.Id_pnCCDframe: (512, 512),
         TypeId.Id_CspadElement: (185, 388),
+        TypeId.Id_Epix10kaArray: (16, 352, 384),  # 16 panels of 352x384
         # Add more as needed
     }
     
@@ -247,6 +313,7 @@ def is_image_type(type_id: int) -> bool:
         TypeId.Id_pnCCDframe, 
         TypeId.Id_CspadElement,
         TypeId.Id_PrincetonFrame,
+        TypeId.Id_Epix10kaArray,
         # Add more as needed
     }
     
@@ -263,6 +330,8 @@ def get_type_description(type_id: int) -> str:
         TypeId.Id_CspadElement: "CSPad 2x1 element (185x388)",
         TypeId.Id_CspadConfig: "CSPad configuration",
         TypeId.Id_PrincetonFrame: "Princeton camera frame",
+        TypeId.Id_Epix10kaArray: "Epix10ka2M detector array (16x352x384)",
+        TypeId.Id_Epix10ka2MConfig: "Epix10ka2M configuration",
         TypeId.Id_Xtc: "XTC container",
         TypeId.Id_EvrData: "Event receiver data",
         TypeId.Id_EBeam: "Electron beam data",
