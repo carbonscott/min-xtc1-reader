@@ -271,7 +271,9 @@ def get_xtc_info(filename: str, max_events: int = 10) -> dict:
                 info['damage_counts'][damage_key] = info['damage_counts'].get(damage_key, 0) + 1
             
             # Analyze XTC tree for type counts
-            tree = walk_xtc_tree(payload, max_level=3)
+            # Skip first 16 bytes of payload (XTC header remainder) for tree walking
+            actual_payload = payload[16:] if len(payload) > 16 else b''
+            tree = walk_xtc_tree(actual_payload, max_level=3)
             for level, xtc, data in tree:
                 type_name = getattr(xtc.contains.type_id, 'name', f"Type_{xtc.contains.type_id}")
                 info['type_counts'][type_name] = info['type_counts'].get(type_name, 0) + 1

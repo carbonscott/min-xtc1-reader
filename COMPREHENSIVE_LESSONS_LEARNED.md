@@ -395,6 +395,54 @@ xmin, ymin = xmin - pix_size/2, ymin - pix_size/2
 
 **Implication**: Cannot hard-code output image dimensions; must calculate from coordinate extrema.
 
+### 10.4 The Psana Ecosystem Dependency
+
+**Critical Discovery**: Psana doesn't directly parse XTC files - it uses a complete detector data management ecosystem
+
+**The Real Psana Architecture**:
+```bash
+# Psana uses DataSource abstraction, not file paths
+DataSource('exp=mfx100903824:run=105:smd')  # Not direct .xtc files
+
+# Environment dependency
+SIT_PSDM_DATA=/sdf/data/lcls/ds  # Points to LCLS data root
+
+# Real detector identifier  
+'MfxEndstation.0:Epix10ka2M.0'  # Not just 'epix10k2M'
+```
+
+**Complete Calibration Framework Discovered**:
+```
+/sdf/data/lcls/ds/mfx/mfx100903824/calib/Epix10ka2M::CalibV1/
+├── MfxEndstation.0:Epix10ka2M.0/
+│   ├── geometry/          # Panel positions (r0003.geom, etc.)
+│   ├── pedestals/         # Baseline correction per pixel
+│   ├── pixel_gain/        # Gain calibration constants  
+│   ├── pixel_rms/         # Noise characterization
+│   └── pixel_status/      # Bad pixel masks
+└── pedestal_workdir/      # Raw calibration measurements
+```
+
+**Root Cause of CLI Extraction Failure**:
+1. **Wrong TypeIds**: Real data uses 6185, 6190, 6193 (not our hardcoded 33)
+2. **Missing calibration context**: Raw XTC data needs pedestal/gain correction
+3. **No detector resolution**: Can't map "epix10k2M" to actual detector instances
+4. **XTC parsing errors**: "XTC extent exceeds payload" suggests format issues
+
+**Lessons Learned**:
+- **Synthetic data success ≠ real data compatibility**: Our assembly logic works perfectly, but data acquisition pipeline is broken
+- **Psana is a complete ecosystem**: Not just an XTC parser, but a detector data management system
+- **Environment matters**: LCLS data organization requires system-level integration
+- **Calibration is essential**: Raw detector data is meaningless without correction
+
+**Implications for min-xtc1-reader**:
+- **Must bridge the gap**: Either integrate with psana's calibration system or implement equivalent functionality
+- **TypeId discovery needed**: Dynamic mapping based on experiment/detector combinations
+- **Environment awareness**: Use `SIT_PSDM_DATA` for data location discovery
+- **Calibration integration**: Parse and apply basic pedestal/gain corrections
+
+**Path Forward**: Build psana-compatible detector discovery while maintaining our coordinate-based assembly advantage.
+
 ---
 
 ## 11. Recommendations for Future Work

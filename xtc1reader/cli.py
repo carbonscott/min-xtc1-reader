@@ -12,7 +12,21 @@ from .xtc_reader import XTCReader, get_xtc_info, print_xtc_tree
 from .data_types import parse_detector_data, is_image_type, get_type_description
 from .binary_format import TypeId, transition_name
 from .geometry import create_cspad_geometry, create_pnccd_geometry, create_camera_geometry, compute_detector_coordinates
-from .epix_utils import get_detector_info, assemble_epix10ka2m_image, get_psana_geometry_info
+from .epix_utils import get_detector_info, assemble_epix10ka2m_image, get_psana_geometry_info, assemble_epix10ka2m_psana_compatible
+
+def get_clean_detector_name(type_id: int) -> str:
+    """Get a clean, short detector name for filenames"""
+    name_map = {
+        TypeId.Id_Frame: "camera",
+        TypeId.Id_pnCCDframe: "pnccd", 
+        TypeId.Id_CspadElement: "cspad",
+        TypeId.Id_PrincetonFrame: "princeton",
+        TypeId.Id_Epix10kaArray: "epix10ka2m",
+        TypeId.Id_Experimental_6193: "epix10ka2m",
+        TypeId.Id_Experimental_117: "epix10ka2m", 
+        TypeId.Id_Experimental_118: "epix10ka2m",
+    }
+    return name_map.get(type_id, f"type_{type_id}")
 from .geometry_parser import load_default_epix10ka2m_geometry, print_geometry_summary
 from .calibration import CalibrationManager, create_default_calibration, calibrate_detector_data
 
@@ -81,15 +95,57 @@ def dump_command(filename: str, max_events: int = 10, show_tree: bool = False):
     return 0
 
 
+def extract_psana_style(exp: str, run: str, detector_name: str, output_dir: str = ".", max_events: int = 1000):
+    """Extract detector data using psana-style experiment/run/detector specification"""
+    import os
+    import numpy as np
+    from .detector_discovery import resolve_detector_from_psana_style
+    from .epix_utils import assemble_epix10ka2m_image, assemble_epix10ka2m_psana_compatible
+    
+    print(f"Psana-style extraction:")
+    print(f"  Experiment: {exp}")
+    print(f"  Run: {run}")
+    print(f"  Detector: {detector_name}")
+    print(f"  Output directory: {output_dir}")
+    
+    # Resolve detector and XTC files using detector discovery
+    detector_info, xtc_files = resolve_detector_from_psana_style(exp, run, detector_name)
+    
+    if not detector_info:
+        print(f"❌ Detector '{detector_name}' not found for experiment {exp}")
+        return 1
+    
+    if not xtc_files:
+        print(f"❌ No XTC files found for experiment {exp}, run {run}")
+        return 1
+    
+    print(f"✅ Found detector: {detector_info.detector_id}")
+    print(f"✅ Found {len(xtc_files)} XTC files")
+    print(f"✅ TypeId mappings: {detector_info.typeid_mappings}")
+    
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # Process first XTC file (or could iterate through all)
+    return extract_command_with_detector_info(xtc_files[0], output_dir, detector_info, max_events)
+
+
 def extract_command(filename: str, output_dir: str = ".", detector_type: str = None, max_events: int = 1000):
-    """Extract detector data from XTC file"""
+    """Extract detector data from XTC file (original direct file method)"""
+    return extract_command_with_detector_info(filename, output_dir, None, max_events, detector_type)
+
+
+def extract_command_with_detector_info(filename: str, output_dir: str, detector_info = None, max_events: int = 1000, detector_type: str = None):
+    """Extract detector data from XTC file with optional detector info"""
     import os
     import numpy as np
     
     print(f"Extracting detector data from: {filename}")
     print(f"Output directory: {output_dir}")
     
-    if detector_type:
+    if detector_info:
+        print(f"Using detector info: {detector_info.detector_id}")
+        print(f"TypeId mappings: {detector_info.typeid_mappings}")
+    elif detector_type:
         print(f"Filtering for detector type: {detector_type}")
     
     os.makedirs(output_dir, exist_ok=True)
@@ -104,15 +160,19 @@ def extract_command(filename: str, output_dir: str = ".", detector_type: str = N
                 
                 # Walk through XTC tree looking for detector data
                 from .xtc_reader import walk_xtc_tree
-                tree = walk_xtc_tree(payload[12:], max_level=5)  # Skip XTC header remainder
+                # Skip first 16 bytes of payload (XTC header remainder) for tree walking
+                actual_payload = payload[16:] if len(payload) > 16 else b''
+                tree = walk_xtc_tree(actual_payload, max_level=5)
                 
                 for level, xtc, data in tree:
                     type_id = xtc.contains.type_id
                     
                     if is_image_type(type_id):
+                        # Get clean detector name for filenames
+                        detector_name = get_clean_detector_name(type_id)
+                        
                         # Filter by detector type if specified
-                        type_name = getattr(type_id, 'name', f"Type_{type_id}")
-                        if detector_type and detector_type.lower() not in type_name.lower():
+                        if detector_type and detector_type.lower() not in detector_name.lower():
                             continue
                         
                         try:
@@ -120,17 +180,50 @@ def extract_command(filename: str, output_dir: str = ".", detector_type: str = N
                             parsed_data = parse_detector_data(data, type_id, xtc.contains.version)
                             
                             if hasattr(parsed_data, 'data') and isinstance(parsed_data.data, np.ndarray):
-                                # Save as numpy array
+                                # Save raw detector data
                                 output_file = os.path.join(output_dir, 
-                                    f"event_{i:04d}_{type_name}_v{xtc.contains.version}.npy")
+                                    f"event_{i:04d}_{detector_name}_v{xtc.contains.version}_raw.npy")
                                 np.save(output_file, parsed_data.data)
                                 
-                                print(f"Saved {type_name} data: {output_file} "
+                                print(f"Saved {detector_name} raw data: {output_file} "
                                       f"(shape: {parsed_data.data.shape})")
                                 extracted_count += 1
+                                
+                            # Special handling for Epix10ka2M - save assembled images too
+                            elif hasattr(parsed_data, 'frames') and isinstance(parsed_data.frames, np.ndarray):
+                                # This is Epix10ka2M data - save raw frames
+                                raw_file = os.path.join(output_dir, 
+                                    f"event_{i:04d}_{detector_name}_v{xtc.contains.version}_raw.npy")
+                                np.save(raw_file, parsed_data.frames)
+                                print(f"Saved {detector_name} raw frames: {raw_file} "
+                                      f"(shape: {parsed_data.frames.shape})")
+                                
+                                # Save simple assembly
+                                try:
+                                    simple_image = assemble_epix10ka2m_image(parsed_data.frames, include_gaps=False)
+                                    simple_file = os.path.join(output_dir,
+                                        f"event_{i:04d}_{detector_name}_v{xtc.contains.version}_simple.npy")
+                                    np.save(simple_file, simple_image)
+                                    print(f"Saved {detector_name} simple assembly: {simple_file} "
+                                          f"(shape: {simple_image.shape})")
+                                except Exception as e:
+                                    print(f"Warning: Simple assembly failed: {e}")
+                                
+                                # Save psana-compatible assembly
+                                try:
+                                    psana_image = assemble_epix10ka2m_psana_compatible(parsed_data.frames)
+                                    psana_file = os.path.join(output_dir,
+                                        f"event_{i:04d}_{detector_name}_v{xtc.contains.version}_psana.npy")
+                                    np.save(psana_file, psana_image)
+                                    print(f"Saved {detector_name} psana assembly: {psana_file} "
+                                          f"(shape: {psana_image.shape})")
+                                except Exception as e:
+                                    print(f"Warning: Psana assembly failed: {e}")
+                                
+                                extracted_count += 3  # Raw + simple + psana
                         
                         except Exception as e:
-                            print(f"Warning: Failed to parse {type_name} data in event {i}: {e}")
+                            print(f"Warning: Failed to parse {detector_name} data in event {i}: {e}")
     
     except Exception as e:
         print(f"Error extracting data: {e}")
@@ -396,6 +489,16 @@ Examples:
     extract_parser.add_argument('--max-events', type=int, default=1000,
                                help='Maximum events to process (default: 1000)')
     
+    # Psana-style extract command
+    psana_parser = subparsers.add_parser('extract-psana', help='Extract detector data using psana-style parameters')
+    psana_parser.add_argument('experiment', help='Experiment name (e.g., mfx100903824)')
+    psana_parser.add_argument('run', help='Run number (e.g., 105)')  
+    psana_parser.add_argument('detector', help='Detector name (e.g., epix10k2M)')
+    psana_parser.add_argument('--output-dir', default='.',
+                             help='Output directory (default: current)')
+    psana_parser.add_argument('--max-events', type=int, default=1000,
+                             help='Maximum events to process (default: 1000)')
+    
     # Geometry command
     geometry_parser = subparsers.add_parser('geometry', help='Generate detector geometry')
     geometry_parser.add_argument('detector_type', choices=['cspad', 'pnccd', 'camera', 'epix10ka2m'],
@@ -430,6 +533,9 @@ Examples:
     
     elif args.command == 'extract':
         return extract_command(args.filename, args.output_dir, args.detector, args.max_events)
+    
+    elif args.command == 'extract-psana':
+        return extract_psana_style(args.experiment, args.run, args.detector, args.output_dir, args.max_events)
     
     elif args.command == 'geometry':
         return geometry_command(args.detector_type, args.output)

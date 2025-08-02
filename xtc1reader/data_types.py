@@ -282,6 +282,30 @@ def parse_detector_data(data: bytes, type_id: int, version: int) -> Any:
     elif type_id == TypeId.Id_Epix10kaArray:
         return parse_epix10ka2m_array(data, version)
     
+    elif type_id == TypeId.Id_Experimental_6193:
+        # Experimental TypeId for Epix10ka2M array data (mfx100903824, old analysis)
+        try:
+            return parse_epix10ka2m_array(data, version)
+        except Exception as e:
+            print(f"Warning: Failed to parse experimental TypeId {type_id} as Epix10ka2M: {e}")
+            return data
+    
+    elif type_id == TypeId.Id_Experimental_117:
+        # Corrected experimental TypeId for Epix10ka2M detector data (~4.3MB)
+        try:
+            return parse_epix10ka2m_array(data, version)
+        except Exception as e:
+            print(f"Warning: Failed to parse experimental TypeId {type_id} as Epix10ka2M: {e}")
+            return data
+            
+    elif type_id == TypeId.Id_Experimental_118:
+        # Corrected experimental TypeId for Epix10ka2M detector data (~4.4MB)
+        try:
+            return parse_epix10ka2m_array(data, version)
+        except Exception as e:
+            print(f"Warning: Failed to parse experimental TypeId {type_id} as Epix10ka2M: {e}")
+            return data
+    
     else:
         # Return raw data for unsupported types
         return data
@@ -314,6 +338,10 @@ def is_image_type(type_id: int) -> bool:
         TypeId.Id_CspadElement,
         TypeId.Id_PrincetonFrame,
         TypeId.Id_Epix10kaArray,
+        # Experimental TypeIds for Epix10ka2M 
+        TypeId.Id_Experimental_6193,  # mfx100903824 Epix10ka2M array data (from old analysis)
+        TypeId.Id_Experimental_117,   # mfx100903824 Epix10ka2M detector data (corrected)
+        TypeId.Id_Experimental_118,   # mfx100903824 Epix10ka2M detector data (corrected)
         # Add more as needed
     }
     
@@ -332,6 +360,12 @@ def get_type_description(type_id: int) -> str:
         TypeId.Id_PrincetonFrame: "Princeton camera frame",
         TypeId.Id_Epix10kaArray: "Epix10ka2M detector array (16x352x384)",
         TypeId.Id_Epix10ka2MConfig: "Epix10ka2M configuration",
+        # Experimental TypeIds for specific experiments
+        TypeId.Id_Experimental_6185: "Epix10ka2M config (experimental - mfx100903824)",
+        TypeId.Id_Experimental_6190: "Epix10ka2M config v2 (experimental - mfx100903824)",
+        TypeId.Id_Experimental_6193: "Epix10ka2M array data (experimental - mfx100903824, old analysis)",
+        TypeId.Id_Experimental_117: "Epix10ka2M detector data (experimental - mfx100903824, ~4.3MB)",
+        TypeId.Id_Experimental_118: "Epix10ka2M detector data (experimental - mfx100903824, ~4.4MB)",
         TypeId.Id_Xtc: "XTC container",
         TypeId.Id_EvrData: "Event receiver data",
         TypeId.Id_EBeam: "Electron beam data",

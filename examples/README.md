@@ -32,6 +32,21 @@ python examples/test_real_data.py
 python examples/test_real_data.py /path/to/your/data.xtc
 ```
 
+### [`visualize_example.py`](visualize_example.py)
+Interactive example demonstrating the two-step visualization workflow:
+- Extract detector images using the CLI
+- Visualize extracted images with matplotlib
+- Multiple visualization modes (single, comparison, multi-event)
+- Smart intensity scaling options
+
+```bash
+# Run interactive example
+python examples/visualize_example.py
+
+# Or show example commands only
+python examples/visualize_example.py  # Choose option 3
+```
+
 ## Usage Patterns
 
 ### Basic File Reading
@@ -99,14 +114,36 @@ xtc1reader dump /path/to/data.xtc --max-events 3
 # Extract CSPad data
 xtc1reader extract /path/to/data.xtc --detector cspad
 
+# Extract Epix10ka2M data (saves raw, simple, and psana assembly)
+xtc1reader extract /path/to/data.xtc --detector epix10ka2m --output-dir ./images
+
 # Show CSPad geometry
 xtc1reader geometry cspad
+
+# Show Epix10ka2M geometry (both simple and psana-compatible)
+xtc1reader geometry epix10ka2m
 
 # Test calibration system
 xtc1reader calibration test
 
 # Create default calibration
 xtc1reader calibration create-default --detector-type cspad --run-number 100
+```
+
+### Detector Image Visualization
+
+```bash
+# Two-step visualization workflow:
+
+# Step 1: Extract detector images
+xtc1reader extract /path/to/data.xtc --detector epix10ka2m --output-dir ./images --max-events 5
+
+# Step 2: Visualize extracted images
+python visualize_detector_images.py ./images                                    # Single image with smart scaling
+python visualize_detector_images.py ./images --mode comparison                  # Compare raw/simple/psana assemblies
+python visualize_detector_images.py ./images --mode multi --max-events 9       # Multi-event grid view
+python visualize_detector_images.py ./images --scaling percentile --colormap plasma  # Custom scaling and colormap
+python visualize_detector_images.py ./images --save detector_image.png         # Save plot to file
 ```
 
 ## Environment Setup

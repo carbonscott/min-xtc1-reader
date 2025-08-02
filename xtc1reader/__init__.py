@@ -47,6 +47,10 @@ from .geometry_definitions import (
     DetectorGeometry, PanelGeometry, CoordinateArrays, PixelIndices,
     EPIX10KA2M_PANEL_SHAPE, EPIX10KA2M_NUM_PANELS, EPIX10KA2M_PIXEL_SIZE_UM
 )
+from .detector_discovery import (
+    DetectorInfo, LCLSEnvironment, create_detector_discovery,
+    resolve_detector_from_psana_style, print_detector_discovery_summary
+)
 
 __all__ = [
     'XTCReader',
@@ -97,5 +101,10 @@ __all__ = [
     'PixelIndices',
     'EPIX10KA2M_PANEL_SHAPE',
     'EPIX10KA2M_NUM_PANELS',
-    'EPIX10KA2M_PIXEL_SIZE_UM'
+    'EPIX10KA2M_PIXEL_SIZE_UM',
+    'DetectorInfo',
+    'LCLSEnvironment',
+    'create_detector_discovery',
+    'resolve_detector_from_psana_style',
+    'print_detector_discovery_summary'
 ]

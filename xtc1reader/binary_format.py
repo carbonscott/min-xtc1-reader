@@ -67,6 +67,17 @@ class TypeId(IntEnum):
     Id_Epix10kaConfig = 32   # Epix10ka configuration
     Id_Epix10kaArray = 33    # Epix10ka array data (for 10ka2M)
     Id_Epix10ka2MConfig = 34 # Epix10ka2M configuration
+    
+    # Experimental/detector-specific TypeIds discovered from real data
+    # These are used in specific experiments and need dynamic resolution
+    Id_Experimental_6185 = 6185  # mfx100903824 Epix10ka2M config (from old analysis)
+    Id_Experimental_6190 = 6190  # mfx100903824 Epix10ka2M config v2 (from old analysis)
+    Id_Experimental_6193 = 6193  # mfx100903824 Epix10ka2M array data (from old analysis)
+    
+    # Corrected experimental TypeIds found with fixed XTC parsing
+    Id_Experimental_117 = 117    # mfx100903824 Epix10ka2M detector data (~4.3MB)
+    Id_Experimental_118 = 118    # mfx100903824 Epix10ka2M detector data (~4.4MB)
+    
     # Add more as needed...
 
 
